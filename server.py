@@ -5,13 +5,24 @@ import uuid
 import dotenv
 import os
 import hashlib
+import json
+import time
 
 app = Flask(__name__)
 
 # Load the environment variables
 dotenv.load_dotenv()
 TREE_FILE = os.getenv('TREE_FILE')
+TREE_JSON = os.getenv('TREE_JSON')
 SERVER_PASSWORD_HASH = hashlib.sha256(os.getenv('SERVER_PASSWORD').encode()).hexdigest()
+SERVER_PORT = os.getenv('SERVER_PORT')
+
+# If TREE_JSON is specified, delete the existing database
+if TREE_JSON:
+    if os.path.exists(TREE_JSON):
+        # Delete the existing database
+        if os.path.exists(TREE_FILE):
+            os.remove(TREE_FILE)
 
 # Create the nodes table
 conn = sqlite3.connect(TREE_FILE)
@@ -24,6 +35,23 @@ c.execute('''CREATE TABLE IF NOT EXISTS nodes
               timestamp TEXT)''')
 conn.commit()
 conn.close()
+
+# If TREE_JSON exists, load it into the database
+if TREE_JSON:
+    if os.path.exists(TREE_JSON):
+        with open(TREE_JSON) as f:
+            tree_json = json.load(f)
+            print(tree_json)
+            conn = sqlite3.connect(TREE_FILE)
+            c = conn.cursor()
+            # get current timestamp
+            timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
+            for node in tree_json['nodes']:
+                node_data = tree_json['nodes'][node]
+                c.execute("INSERT INTO nodes (id, parent_id, text, author, timestamp) VALUES (?, ?, ?, ?, ?)",
+                            (node, node_data['parentId'], node_data['text'], "Morpheus", timestamp))
+            conn.commit()
+            conn.close()
 
 # Define a function to check if a user is authorized to make changes to the database
 def is_authorized(key):
@@ -65,7 +93,7 @@ def save_node():
     return jsonify({'success': True})
 
 # Define a route for updating an existing node in the database
-@app.route('/nodes/<int:node_id>', methods=['PUT'])
+@app.route('/nodes/<node_id>', methods=['PUT'])
 def update_node(node_id):
     # Check if the user is authorized to make changes to the database
     if not is_authorized(request.headers.get('Authorization')):
@@ -81,7 +109,7 @@ def update_node(node_id):
     return jsonify({'success': True})
 
 # Define a route for deleting a node from the database
-@app.route('/nodes/<int:node_id>', methods=['DELETE'])
+@app.route('/nodes/<node_id>', methods=['DELETE'])
 def delete_node(node_id):
     # Check if the user is authorized to make changes to the database
     if not is_authorized(request.headers.get('Authorization')):
@@ -130,7 +158,7 @@ def get_all_nodes():
     return jsonify({'success': True, 'nodes': nodes})
 
 # Define a route for getting a single node from the database
-@app.route('/nodes/<int:node_id>', methods=['GET'])
+@app.route('/nodes/<node_id>', methods=['GET'])
 def get_node(node_id):
     # Check if the user is authorized to make changes to the database
     if not is_authorized(request.headers.get('Authorization')):
@@ -167,4 +195,4 @@ def get_root_node():
     }
     return jsonify({'success': True, 'node': node})
 
-app.run()
+app.run(port=SERVER_PORT, debug=True)

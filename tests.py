@@ -5,7 +5,7 @@ import requests
 class TestServer(unittest.TestCase):
 
     def setUp(self):
-        self.url = 'http://localhost:5000'
+        self.url = 'http://localhost:8080'
         self.headers = {
             "Authorization":"123456"
         }
