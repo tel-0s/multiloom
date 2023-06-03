@@ -1,2 +1,3 @@
 .env
 tree.db
+*.json
