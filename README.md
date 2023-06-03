@@ -35,7 +35,3 @@ This file requires the following dependencies:
 - `flask`: A Python web framework for handling HTTP requests.
 
 Please note that Multiloom is currently in early development and is not yet ready for use.
-
-## TODO
-
-- [ ] Add support for multiple parents per node
