@@ -6,6 +6,9 @@ class TestServer(unittest.TestCase):
 
     def setUp(self):
         self.url = 'http://localhost:5000'
+        self.headers = {
+            "Authorization":"123456"
+        }
 
     def test_save_node(self):
         # Test saving a new node to the database
@@ -15,7 +18,7 @@ class TestServer(unittest.TestCase):
             'author': 'Test author',
             'timestamp': '2022-01-01 00:00:00'
         }
-        response = requests.post(f'{self.url}/nodes', json=data)
+        response = requests.post(f'{self.url}/nodes', json=data, headers=self.headers)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {'success': True})
 
@@ -26,9 +29,16 @@ class TestServer(unittest.TestCase):
             'author': 'Updated author',
             'timestamp': '2022-01-01 00:00:00'
         }
-        response = requests.put(f'{self.url}/nodes/1', json=data)
+        response = requests.put(f'{self.url}/nodes/1', json=data, headers=self.headers)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {'success': True})
+
+    def test_get_nodes(self):
+        # Test getting all nodes from the database after a given timestamp
+        response = requests.get(f'{self.url}/nodes/get/2021-01-01 00:00:00', headers=self.headers)
+        print(response.json())
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['success'], True)
 
 if __name__ == '__main__':
     unittest.main()
