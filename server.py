@@ -158,13 +158,12 @@ def get_all_nodes():
     c.execute("SELECT * FROM nodes")
     nodes = c.fetchall()
     # jsonify the nodes
-    nodes = [{
-        'id': node[0],
+    nodes = {node[0]:{
         'parent_ids': node[1].split(',') if node[1] else None,
         'text': node[2],
         'author': node[3],
         'timestamp': node[4]
-    } for node in nodes]
+    } for node in nodes}
     return jsonify({'success': True, 'nodes': nodes})
 
 # Define a route for getting a single node from the database
@@ -205,4 +204,23 @@ def get_root_node():
     }
     return jsonify({'success': True, 'node': node})
 
-app.run(port=SERVER_PORT, debug=True)
+# Define a route for getting the children of a node from the database
+@app.route('/nodes/<node_id>/children', methods=['GET'])
+def get_children(node_id):
+    # Check if the user is authorized to make changes to the database
+    if not is_authorized(request.headers.get('Authorization')):
+        return jsonify({'success': False, 'error': 'Unauthorized'})
+    db, c = get_db()
+    c.execute("SELECT * FROM nodes WHERE parent_ids LIKE ?", ('%'+node_id+'%',))
+    nodes = c.fetchall()
+    # jsonify the nodes
+    nodes = [{
+        'id': node[0],
+        'parent_ids': node[1].split(',') if node[1] else None,
+        'text': node[2],
+        'author': node[3],
+        'timestamp': node[4]
+    } for node in nodes]
+    return jsonify({'success': True, 'nodes': nodes})
+
+app.run(host="0.0.0.0", port=SERVER_PORT, debug=True)
