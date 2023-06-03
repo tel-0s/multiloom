@@ -41,11 +41,12 @@ if TREE_JSON:
     if os.path.exists(TREE_JSON):
         with open(TREE_JSON) as f:
             tree_json = json.load(f)
-            print(tree_json)
-            conn = sqlite3.connect(TREE_FILE)
-            c = conn.cursor()
+            # print(tree_json)
+
             # get current timestamp
             timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
+            conn = sqlite3.connect(TREE_FILE)
+            c = conn.cursor()
             for node in tree_json['nodes']:
                 node_data = tree_json['nodes'][node]
                 # get parent id(s)
