@@ -110,4 +110,61 @@ def get_nodes(timestamp):
     } for node in nodes]
     return jsonify({'success': True, 'nodes': nodes})
 
+# Define a route for getting all nodes from the database
+@app.route('/nodes', methods=['GET'])
+def get_all_nodes():
+    # Check if the user is authorized to make changes to the database
+    if not is_authorized(request.headers.get('Authorization')):
+        return jsonify({'success': False, 'error': 'Unauthorized'})
+    db, c = get_db()
+    c.execute("SELECT * FROM nodes")
+    nodes = c.fetchall()
+    # jsonify the nodes
+    nodes = [{
+        'id': node[0],
+        'parent_id': node[1],
+        'text': node[2],
+        'author': node[3],
+        'timestamp': node[4]
+    } for node in nodes]
+    return jsonify({'success': True, 'nodes': nodes})
+
+# Define a route for getting a single node from the database
+@app.route('/nodes/<int:node_id>', methods=['GET'])
+def get_node(node_id):
+    # Check if the user is authorized to make changes to the database
+    if not is_authorized(request.headers.get('Authorization')):
+        return jsonify({'success': False, 'error': 'Unauthorized'})
+    db, c = get_db()
+    c.execute("SELECT * FROM nodes WHERE id = ?", (node_id,))
+    node = c.fetchone()
+    # jsonify the node
+    node = {
+        'id': node[0],
+        'parent_id': node[1],
+        'text': node[2],
+        'author': node[3],
+        'timestamp': node[4]
+    }
+    return jsonify({'success': True, 'node': node})
+
+# Define a route for getting the root node from the database
+@app.route('/nodes/root', methods=['GET'])
+def get_root_node():
+    # Check if the user is authorized to make changes to the database
+    if not is_authorized(request.headers.get('Authorization')):
+        return jsonify({'success': False, 'error': 'Unauthorized'})
+    db, c = get_db()
+    c.execute("SELECT * FROM nodes WHERE parent_id IS NULL")
+    node = c.fetchone()
+    # jsonify the node
+    node = {
+        'id': node[0],
+        'parent_id': node[1],
+        'text': node[2],
+        'author': node[3],
+        'timestamp': node[4]
+    }
+    return jsonify({'success': True, 'node': node})
+
 app.run()
