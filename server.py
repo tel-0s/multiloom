@@ -29,7 +29,7 @@ conn = sqlite3.connect(TREE_FILE)
 c = conn.cursor()
 c.execute('''CREATE TABLE IF NOT EXISTS nodes
              (id TEXT PRIMARY KEY,
-              parent_id TEXT,
+              parent_ids TEXT,
               text TEXT,
               author TEXT,
               timestamp TEXT)''')
@@ -48,8 +48,13 @@ if TREE_JSON:
             timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
             for node in tree_json['nodes']:
                 node_data = tree_json['nodes'][node]
-                c.execute("INSERT INTO nodes (id, parent_id, text, author, timestamp) VALUES (?, ?, ?, ?, ?)",
-                            (node, node_data['parentId'], node_data['text'], "Morpheus", timestamp))
+                # get parent id(s)
+                if 'parentIds' in node_data:
+                    parent_ids = ','.join(node_data['parentIds'])
+                else:
+                    parent_ids = node_data['parentId']
+                c.execute("INSERT INTO nodes (id, parent_ids, text, author, timestamp) VALUES (?, ?, ?, ?, ?)",
+                            (node, parent_ids, node_data['text'], "Morpheus", timestamp))
             conn.commit()
             conn.close()
 
@@ -81,14 +86,18 @@ def save_node():
         return jsonify({'success': False, 'error': 'Unauthorized'})
     db, c = get_db()
     data = request.get_json()
-    parent_id = data['parent_id']
+    # get parent id(s)
+    if 'parentIds' in data:
+        parent_ids = ','.join(data['parentIds'])
+    else:
+        parent_ids = data['parentId']
     text = data['text']
     author = data['author']
     timestamp = data['timestamp']
     # generate a new id for the node
     node_id = uuid.uuid4().hex
-    c.execute("INSERT INTO nodes (id, parent_id, text, author, timestamp) VALUES (?, ?, ?, ?, ?)",
-                (node_id, parent_id, text, author, timestamp))
+    c.execute("INSERT INTO nodes (id, parent_ids, text, author, timestamp) VALUES (?, ?, ?, ?, ?)",
+                (node_id, parent_ids, text, author, timestamp))
     db.commit()
     return jsonify({'success': True})
 
@@ -131,7 +140,7 @@ def get_nodes(timestamp):
     # jsonify the nodes
     nodes = [{
         'id': node[0],
-        'parent_id': node[1],
+        'parent_ids': node[1].split(',') if node[1] else None,
         'text': node[2],
         'author': node[3],
         'timestamp': node[4]
@@ -150,7 +159,7 @@ def get_all_nodes():
     # jsonify the nodes
     nodes = [{
         'id': node[0],
-        'parent_id': node[1],
+        'parent_ids': node[1].split(',') if node[1] else None,
         'text': node[2],
         'author': node[3],
         'timestamp': node[4]
@@ -169,7 +178,7 @@ def get_node(node_id):
     # jsonify the node
     node = {
         'id': node[0],
-        'parent_id': node[1],
+        'parent_ids': node[1].split(',') if node[1] else None,
         'text': node[2],
         'author': node[3],
         'timestamp': node[4]
@@ -183,12 +192,12 @@ def get_root_node():
     if not is_authorized(request.headers.get('Authorization')):
         return jsonify({'success': False, 'error': 'Unauthorized'})
     db, c = get_db()
-    c.execute("SELECT * FROM nodes WHERE parent_id IS NULL")
+    c.execute("SELECT * FROM nodes WHERE parent_ids IS NULL")
     node = c.fetchone()
     # jsonify the node
     node = {
         'id': node[0],
-        'parent_id': node[1],
+        'parent_ids': None,
         'text': node[2],
         'author': node[3],
         'timestamp': node[4]
