@@ -30,6 +30,7 @@ c = conn.cursor()
 c.execute('''CREATE TABLE IF NOT EXISTS nodes
              (id TEXT PRIMARY KEY,
               parent_ids TEXT,
+              children_ids TEXT,
               text TEXT,
               author TEXT,
               timestamp TEXT)''')
@@ -54,8 +55,20 @@ if TREE_JSON:
                     parent_ids = ','.join(node_data['parentIds'])
                 else:
                     parent_ids = node_data['parentId']
-                c.execute("INSERT INTO nodes (id, parent_ids, text, author, timestamp) VALUES (?, ?, ?, ?, ?)",
-                            (node, parent_ids, node_data['text'], "Morpheus", timestamp))
+                # get children id(s)
+                if 'childrenIds' in node_data:
+                    children_ids = ','.join(node_data['childrenIds'])
+                else:
+                    # we have to find the children ids from the tree_json
+                    children_ids = []
+                    for child in tree_json['nodes']:
+                        if 'parentIds' in tree_json['nodes'][child]:
+                            if node in tree_json['nodes'][child]['parentIds']:
+                                children_ids.append(child)
+                    children_ids = ','.join(children_ids)
+                # insert the node into the database
+                c.execute("INSERT INTO nodes (id, parent_ids, children_ids, text, author, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+                            (node, parent_ids, children_ids, node_data['text'], "Morpheus", timestamp))
             conn.commit()
             conn.close()
 
@@ -92,13 +105,18 @@ def save_node():
         parent_ids = ','.join(data['parentIds'])
     else:
         parent_ids = data['parentId']
+    # get children id(s)
+    if 'childrenIds' in data:
+        children_ids = ','.join(data['childrenIds'])
+    else:
+        children_ids = ''
     text = data['text']
     author = data['author']
     timestamp = data['timestamp']
     # generate a new id for the node
     node_id = uuid.uuid4().hex
-    c.execute("INSERT INTO nodes (id, parent_ids, text, author, timestamp) VALUES (?, ?, ?, ?, ?)",
-                (node_id, parent_ids, text, author, timestamp))
+    c.execute("INSERT INTO nodes (id, parent_ids, chlidren_ids, text, author, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+                (node_id, parent_ids, children_ids, text, author, timestamp))
     db.commit()
     return jsonify({'success': True})
 
@@ -142,9 +160,10 @@ def get_nodes(timestamp):
     nodes = [{
         'id': node[0],
         'parent_ids': node[1].split(',') if node[1] else None,
-        'text': node[2],
-        'author': node[3],
-        'timestamp': node[4]
+        'children_ids': node[2].split(',') if node[2] else None,
+        'text': node[3],
+        'author': node[4],
+        'timestamp': node[5]
     } for node in nodes]
     return jsonify({'success': True, 'nodes': nodes})
 
@@ -160,9 +179,10 @@ def get_all_nodes():
     # jsonify the nodes
     nodes = {node[0]:{
         'parent_ids': node[1].split(',') if node[1] else None,
-        'text': node[2],
-        'author': node[3],
-        'timestamp': node[4]
+        'children_ids': node[2].split(',') if node[2] else None,
+        'text': node[3],
+        'author': node[4],
+        'timestamp': node[5]
     } for node in nodes}
     return jsonify({'success': True, 'nodes': nodes})
 
@@ -179,9 +199,10 @@ def get_node(node_id):
     node = {
         'id': node[0],
         'parent_ids': node[1].split(',') if node[1] else None,
-        'text': node[2],
-        'author': node[3],
-        'timestamp': node[4]
+        'children_ids': node[2].split(',') if node[2] else None,
+        'text': node[3],
+        'author': node[4],
+        'timestamp': node[5]
     }
     return jsonify({'success': True, 'node': node})
 
@@ -197,10 +218,11 @@ def get_root_node():
     # jsonify the node
     node = {
         'id': node[0],
-        'parent_ids': None,
-        'text': node[2],
-        'author': node[3],
-        'timestamp': node[4]
+        'parent_ids': node[1].split(',') if node[1] else None,
+        'children_ids': node[2].split(',') if node[2] else None,
+        'text': node[3],
+        'author': node[4],
+        'timestamp': node[5]
     }
     return jsonify({'success': True, 'node': node})
 
@@ -217,9 +239,10 @@ def get_children(node_id):
     nodes = [{
         'id': node[0],
         'parent_ids': node[1].split(',') if node[1] else None,
-        'text': node[2],
-        'author': node[3],
-        'timestamp': node[4]
+        'children_ids': node[2].split(',') if node[2] else None,
+        'text': node[3],
+        'author': node[4],
+        'timestamp': node[5]
     } for node in nodes]
     return jsonify({'success': True, 'nodes': nodes})
 
