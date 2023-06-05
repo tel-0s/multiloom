@@ -1,15 +1,6 @@
 # Multiloom
 
-Multiloom is a multi-user variation of the tree-based GPT-powered writing interface [Loom](https://github.com/socketeer/loom) with a focus on collaborative writing. It is currently in early development and is not yet ready for use.
-
-## Features
-
-* Collaborative editing: Multiple users can edit the same tree simultaneously, with changes synced in real time and attributed to users. Changes are replayed when users join.
-* Read mode: Includes a linear story view, tree nav bar, and edit mode.
-* Tree view: Allows users to explore the tree visually with the mouse, expand and collapse nodes, change tree topology, and edit nodes in place.
-* Navigation: Includes hotkeys, bookmarks, chapters, and a 'visited' state.
-* Generation: Allows users to generate N children with GPT-3, modify generation settings, and change hidden memory on a node-by-node basis.
-* File I/O: Allows users to open/save trees as JSON files, work with trees in multiple tabs, and combine trees.
+Multiloom is a backend server for sharing [Loom](https://github.com/socketteer/loom) trees with a focus on collaborative writing. It is currently in early development and is not yet ready for use.
 
 ## Server
 
@@ -35,3 +26,7 @@ This file requires the following dependencies:
 - `flask`: A Python web framework for handling HTTP requests.
 
 Please note that Multiloom is currently in early development and is not yet ready for use.
+
+## TODO
+
+- [ ] Add support for loading Bonsai & python-Loom trees from JSON files.
