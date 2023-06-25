@@ -14,6 +14,7 @@ app = Flask(__name__)
 dotenv.load_dotenv()
 TREE_FILE = os.getenv('TREE_FILE')
 TREE_JSON = os.getenv('TREE_JSON')
+TREE_ID = os.getenv('TREE_ID')
 SERVER_PASSWORD_HASH = hashlib.sha256(os.getenv('SERVER_PASSWORD').encode()).hexdigest()
 SERVER_PORT = os.getenv('SERVER_PORT')
 
@@ -37,10 +38,19 @@ c.execute('''CREATE TABLE IF NOT EXISTS nodes
 conn.commit()
 conn.close()
 
+# Create the history table (just node ids, timestamps, and operations)
+conn = sqlite3.connect(TREE_FILE)
+c = conn.cursor()
+c.execute('''CREATE TABLE IF NOT EXISTS history
+             (id TEXT PRIMARY KEY,
+              timestamp TEXT,
+              operation TEXT,
+              author TEXT)''')
+
 # If TREE_JSON exists, load it into the database
 if TREE_JSON:
     if os.path.exists(TREE_JSON):
-        with open(TREE_JSON) as f:
+        with open(TREE_JSON, encoding='utf-8') as f:
             tree_json = json.load(f)
             # print(tree_json)
 
@@ -98,8 +108,12 @@ def save_node():
     # Check if the user is authorized to make changes to the database
     if not is_authorized(request.headers.get('Authorization')):
         return jsonify({'success': False, 'error': 'Unauthorized'})
+    # Check if the tree id is correct
+    if request.headers.get('Tree-Id') != TREE_ID:
+        return jsonify({'success': False, 'error': 'Invalid Tree-Id'})
     db, c = get_db()
     data = request.get_json()
+    print(data)
     # get parent id(s)
     if 'parentIds' in data:
         parent_ids = ','.join(data['parentIds'])
@@ -115,8 +129,11 @@ def save_node():
     timestamp = data['timestamp']
     # generate a new id for the node
     node_id = uuid.uuid4().hex
-    c.execute("INSERT INTO nodes (id, parent_ids, chlidren_ids, text, author, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+    c.execute("INSERT INTO nodes (id, parent_ids, children_ids, text, author, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
                 (node_id, parent_ids, children_ids, text, author, timestamp))
+    # Add the operation to the history table
+    c.execute("INSERT INTO history (id, timestamp, operation, author) VALUES (?, ?, ?, ?)",
+                (node_id, time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()), 'create', author))
     db.commit()
     return jsonify({'success': True})
 
@@ -126,6 +143,9 @@ def update_node(node_id):
     # Check if the user is authorized to make changes to the database
     if not is_authorized(request.headers.get('Authorization')):
         return jsonify({'success': False, 'error': 'Unauthorized'})
+    # Check if the tree id is correct
+    if request.headers.get('Tree-Id') != TREE_ID:
+        return jsonify({'success': False, 'error': 'Invalid Tree-Id'})
     db, c = get_db()
     data = request.get_json()
     text = data['text']
@@ -133,6 +153,9 @@ def update_node(node_id):
     timestamp = data['timestamp']
     c.execute("UPDATE nodes SET text = ?, author = ?, timestamp = ? WHERE id = ?",
               (text, author, timestamp, node_id))
+    # Add the operation to the history table
+    c.execute("INSERT INTO history (id, timestamp, operation, author) VALUES (?, ?, ?, ?)",
+                (node_id, time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()), 'update', author))
     db.commit()
     return jsonify({'success': True})
 
@@ -142,10 +165,34 @@ def delete_node(node_id):
     # Check if the user is authorized to make changes to the database
     if not is_authorized(request.headers.get('Authorization')):
         return jsonify({'success': False, 'error': 'Unauthorized'})
+    # Check if the tree id is correct
+    if request.headers.get('Tree-Id') != TREE_ID:
+        return jsonify({'success': False, 'error': 'Invalid Tree-Id'})
     db, c = get_db()
     c.execute("DELETE FROM nodes WHERE id = ?", (node_id,))
+    # Add the operation to the history table
+    author = request.args.get('author')
+    c.execute("INSERT INTO history (id, timestamp, operation, author) VALUES (?, ?, ?, ?)",
+                (node_id, time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()), 'delete', author))
     db.commit()
     return jsonify({'success': True})
+
+# Define a route for checking if a node exists in the database
+@app.route('/nodes/exists/<node_id>', methods=['GET'])
+def node_exists(node_id):
+    # Check if the user is authorized to make changes to the database
+    if not is_authorized(request.headers.get('Authorization')):
+        return jsonify({'success': False, 'error': 'Unauthorized'})
+    # Check if the tree id is correct
+    if request.headers.get('Tree-Id') != TREE_ID:
+        return jsonify({'success': False, 'error': 'Invalid Tree-Id'})
+    db, c = get_db()
+    c.execute("SELECT * FROM nodes WHERE id = ?", (node_id,))
+    node = c.fetchone()
+    if node:
+        return jsonify({'success': True, 'exists': True})
+    else:
+        return jsonify({'success': True, 'exists': False})
 
 # Define a route for getting all nodes from the database after a given timestamp
 @app.route('/nodes/get/<timestamp>', methods=['GET'])
@@ -153,6 +200,9 @@ def get_nodes(timestamp):
     # Check if the user is authorized to make changes to the database
     if not is_authorized(request.headers.get('Authorization')):
         return jsonify({'success': False, 'error': 'Unauthorized'})
+    # Check if the tree id is correct
+    if request.headers.get('Tree-Id') != TREE_ID:
+        return jsonify({'success': False, 'error': 'Invalid Tree-Id'})
     db, c = get_db()
     c.execute("SELECT * FROM nodes WHERE timestamp > ?", (timestamp,))
     nodes = c.fetchall()
@@ -167,12 +217,31 @@ def get_nodes(timestamp):
     } for node in nodes]
     return jsonify({'success': True, 'nodes': nodes})
 
+# Define a route for getting all node ids from the database
+@app.route('/nodes/ids', methods=['GET'])
+def get_all_node_ids():
+    # Check if the user is authorized to make changes to the database
+    if not is_authorized(request.headers.get('Authorization')):
+        return jsonify({'success': False, 'error': 'Unauthorized'})
+    # Check if the tree id is correct
+    if request.headers.get('Tree-Id') != TREE_ID:
+        return jsonify({'success': False, 'error': 'Invalid Tree-Id'})
+    db, c = get_db()
+    c.execute("SELECT id FROM nodes")
+    nodes = c.fetchall()
+    # jsonify the nodes
+    nodes = [node[0] for node in nodes]
+    return jsonify({'success': True, 'nodes': nodes})
+
 # Define a route for getting all nodes from the database
 @app.route('/nodes', methods=['GET'])
 def get_all_nodes():
     # Check if the user is authorized to make changes to the database
     if not is_authorized(request.headers.get('Authorization')):
         return jsonify({'success': False, 'error': 'Unauthorized'})
+    # Check if the tree id is correct
+    if request.headers.get('Tree-Id') != TREE_ID:
+        return jsonify({'success': False, 'error': 'Invalid Tree-Id'})
     db, c = get_db()
     c.execute("SELECT * FROM nodes")
     nodes = c.fetchall()
@@ -186,12 +255,29 @@ def get_all_nodes():
     } for node in nodes}
     return jsonify({'success': True, 'nodes': nodes})
 
+# Define a route for getting the number of nodes in the database
+@app.route('/nodes/count', methods=['GET'])
+def get_node_count():
+    # Check if the user is authorized to make changes to the database
+    if not is_authorized(request.headers.get('Authorization')):
+        return jsonify({'success': False, 'error': 'Unauthorized'})
+    # Check if the tree id is correct
+    if request.headers.get('Tree-Id') != TREE_ID:
+        return jsonify({'success': False, 'error': 'Invalid Tree-Id'})
+    db, c = get_db()
+    c.execute("SELECT COUNT(*) FROM nodes")
+    count = c.fetchone()[0]
+    return jsonify({'success': True, 'count': count})
+
 # Define a route for getting a single node from the database
 @app.route('/nodes/<node_id>', methods=['GET'])
 def get_node(node_id):
     # Check if the user is authorized to make changes to the database
     if not is_authorized(request.headers.get('Authorization')):
         return jsonify({'success': False, 'error': 'Unauthorized'})
+    # Check if the tree id is correct
+    if request.headers.get('Tree-Id') != TREE_ID:
+        return jsonify({'success': False, 'error': 'Invalid Tree-Id'})
     db, c = get_db()
     c.execute("SELECT * FROM nodes WHERE id = ?", (node_id,))
     node = c.fetchone()
@@ -212,6 +298,9 @@ def get_root_node():
     # Check if the user is authorized to make changes to the database
     if not is_authorized(request.headers.get('Authorization')):
         return jsonify({'success': False, 'error': 'Unauthorized'})
+    # Check if the tree id is correct
+    if request.headers.get('Tree-Id') != TREE_ID:
+        return jsonify({'success': False, 'error': 'Invalid Tree-Id'})
     db, c = get_db()
     c.execute("SELECT * FROM nodes WHERE parent_ids IS NULL")
     node = c.fetchone()
@@ -232,6 +321,9 @@ def get_children(node_id):
     # Check if the user is authorized to make changes to the database
     if not is_authorized(request.headers.get('Authorization')):
         return jsonify({'success': False, 'error': 'Unauthorized'})
+    # Check if the tree id is correct
+    if request.headers.get('Tree-Id') != TREE_ID:
+        return jsonify({'success': False, 'error': 'Invalid Tree-Id'})
     db, c = get_db()
     c.execute("SELECT * FROM nodes WHERE parent_ids LIKE ?", ('%'+node_id+'%',))
     nodes = c.fetchall()
@@ -245,5 +337,70 @@ def get_children(node_id):
         'timestamp': node[5]
     } for node in nodes]
     return jsonify({'success': True, 'nodes': nodes})
+
+# Define a route for getting the parents of a node from the database
+@app.route('/nodes/<node_id>/parents', methods=['GET'])
+def get_parents(node_id):
+    # Check if the user is authorized to make changes to the database
+    if not is_authorized(request.headers.get('Authorization')):
+        return jsonify({'success': False, 'error': 'Unauthorized'})
+    # Check if the tree id is correct
+    if request.headers.get('Tree-Id') != TREE_ID:
+        return jsonify({'success': False, 'error': 'Invalid Tree-Id'})
+    db, c = get_db()
+    c.execute("SELECT * FROM nodes WHERE children_ids LIKE ?", ('%'+node_id+'%',))
+    nodes = c.fetchall()
+    # jsonify the nodes
+    nodes = [{
+        'id': node[0],
+        'parent_ids': node[1].split(',') if node[1] else None,
+        'children_ids': node[2].split(',') if node[2] else None,
+        'text': node[3],
+        'author': node[4],
+        'timestamp': node[5]
+    } for node in nodes]
+    return jsonify({'success': True, 'nodes': nodes})
+
+# Define a route for getting the history from the database
+@app.route('/history', methods=['GET'])
+def get_history():
+    # Check if the user is authorized to make changes to the database
+    if not is_authorized(request.headers.get('Authorization')):
+        return jsonify({'success': False, 'error': 'Unauthorized'})
+    # Check if the tree id is correct
+    if request.headers.get('Tree-Id') != TREE_ID:
+        return jsonify({'success': False, 'error': 'Invalid Tree-Id'})
+    db, c = get_db()
+    c.execute("SELECT * FROM history")
+    history = c.fetchall()
+    # jsonify the history
+    history = [{
+        'node_id': h[0],
+        'timestamp': h[1],
+        'operation': h[2],
+        'author': h[3]
+    } for h in history]
+    return jsonify({'success': True, 'history': history})
+
+# Define a route for getting the history from the database after a certain timestamp
+@app.route('/history/<timestamp>', methods=['GET'])
+def get_history_after(timestamp):
+    # Check if the user is authorized to make changes to the database
+    if not is_authorized(request.headers.get('Authorization')):
+        return jsonify({'success': False, 'error': 'Unauthorized'})
+    # Check if the tree id is correct
+    if request.headers.get('Tree-Id') != TREE_ID:
+        return jsonify({'success': False, 'error': 'Invalid Tree-Id'})
+    db, c = get_db()
+    c.execute("SELECT * FROM history WHERE timestamp > ?", (timestamp,))
+    history = c.fetchall()
+    # jsonify the history
+    history = [{
+        'node_id': h[0],
+        'timestamp': h[1],
+        'operation': h[2],
+        'author': h[3]
+    } for h in history]
+    return jsonify({'success': True, 'history': history})
 
 app.run(host="0.0.0.0", port=SERVER_PORT, debug=True)

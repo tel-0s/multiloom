@@ -13,7 +13,7 @@ class TestServer(unittest.TestCase):
     def test_save_node(self):
         # Test saving a new node to the database
         data = {
-            'parent_id': "",
+            'parentId': "",
             'text': 'Test node',
             'author': 'Test author',
             'timestamp': '2022-01-01 00:00:00'
@@ -36,6 +36,27 @@ class TestServer(unittest.TestCase):
     def test_get_nodes(self):
         # Test getting all nodes from the database after a given timestamp
         response = requests.get(f'{self.url}/nodes/get/2021-01-01 00:00:00', headers=self.headers)
+        print(response.json())
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['success'], True)
+
+    def test_get_node_ids(self):
+        # Test getting all node ids from the database
+        response = requests.get(f'{self.url}/nodes/ids', headers=self.headers)
+        print(response.json())
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['success'], True)
+
+    def test_node_exists(self):
+        # Test checking if a node exists in the database
+        response = requests.get(f'{self.url}/nodes/exists/1', headers=self.headers)
+        print(response.json())
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['success'], True)
+
+    def test_get_history(self):
+        # Test getting the history from the database
+        response = requests.get(f'{self.url}/history', headers=self.headers)
         print(response.json())
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['success'], True)
