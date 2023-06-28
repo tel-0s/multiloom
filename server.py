@@ -193,6 +193,28 @@ def node_exists(node_id):
         return jsonify({'success': True, 'exists': True})
     else:
         return jsonify({'success': True, 'exists': False})
+    
+# Define a route for checking if a list of nodes exists in the database
+@app.route('/nodes/exists', methods=['POST'])
+def nodes_exist():
+    # Check if the user is authorized to make changes to the database
+    if not is_authorized(request.headers.get('Authorization')):
+        return jsonify({'success': False, 'error': 'Unauthorized'})
+    # Check if the tree id is correct
+    if request.headers.get('Tree-Id') != TREE_ID:
+        return jsonify({'success': False, 'error': 'Invalid Tree-Id'})
+    db, c = get_db()
+    data = request.get_json()
+    node_ids = data['nodeIds']
+    exists = []
+    for node_id in node_ids:
+        c.execute("SELECT * FROM nodes WHERE id = ?", (node_id,))
+        node = c.fetchone()
+        if node:
+            exists.append(True)
+        else:
+            exists.append(False)
+    return jsonify({'success': True, 'exists': exists})
 
 # Define a route for getting all nodes from the database after a given timestamp
 @app.route('/nodes/get/<timestamp>', methods=['GET'])
