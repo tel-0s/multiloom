@@ -127,13 +127,54 @@ def save_node():
     text = data['text']
     author = data['author']
     timestamp = data['timestamp']
-    # generate a new id for the node
-    node_id = uuid.uuid4().hex
+    if 'id' in data:
+        node_id = data['id']
+    else:
+        # generate a new id for the node
+        node_id = uuid.uuid4().hex
     c.execute("INSERT INTO nodes (id, parent_ids, children_ids, text, author, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
                 (node_id, parent_ids, children_ids, text, author, timestamp))
     # Add the operation to the history table
     c.execute("INSERT INTO history (id, timestamp, operation, author) VALUES (?, ?, ?, ?)",
                 (node_id, time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()), 'create', author))
+    db.commit()
+    return jsonify({'success': True})
+
+# Define a route for saving a set of new nodes to the database
+@app.route('/nodes/batch', methods=['POST'])
+def save_nodes():
+    # Check if the user is authorized to make changes to the database
+    if not is_authorized(request.headers.get('Authorization')):
+        return jsonify({'success': False, 'error': 'Unauthorized'})
+    # Check if the tree id is correct
+    if request.headers.get('Tree-Id') != TREE_ID:
+        return jsonify({'success': False, 'error': 'Invalid Tree-Id'})
+    db, c = get_db()
+    data = request.get_json()
+    for node in data:
+        # get parent id(s)
+        if 'parentIds' in node:
+            parent_ids = ','.join(node['parentIds'])
+        else:
+            parent_ids = node['parentId']
+        # get children id(s)
+        if 'childrenIds' in node:
+            children_ids = ','.join(node['childrenIds'])
+        else:
+            children_ids = ''
+        text = node['text']
+        author = node['author']
+        timestamp = node['timestamp']
+        if 'id' in node:
+            node_id = node['id']
+        else:
+            # generate a new id for the node
+            node_id = uuid.uuid4().hex
+        c.execute("INSERT INTO nodes (id, parent_ids, children_ids, text, author, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+                    (node_id, parent_ids, children_ids, text, author, timestamp))
+        # Add the operation to the history table
+        c.execute("INSERT INTO history (id, timestamp, operation, author) VALUES (?, ?, ?, ?)",
+                    (node_id, time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()), 'create', author))
     db.commit()
     return jsonify({'success': True})
 
@@ -206,14 +247,14 @@ def nodes_exist():
     db, c = get_db()
     data = request.get_json()
     node_ids = data['nodeIds']
-    exists = []
+    exists = {}
     for node_id in node_ids:
         c.execute("SELECT * FROM nodes WHERE id = ?", (node_id,))
         node = c.fetchone()
         if node:
-            exists.append(True)
+            exists[node_id] = True
         else:
-            exists.append(False)
+            exists[node_id] = False
     return jsonify({'success': True, 'exists': exists})
 
 # Define a route for getting all nodes from the database after a given timestamp
@@ -226,7 +267,7 @@ def get_nodes(timestamp):
     if request.headers.get('Tree-Id') != TREE_ID:
         return jsonify({'success': False, 'error': 'Invalid Tree-Id'})
     db, c = get_db()
-    c.execute("SELECT * FROM nodes WHERE timestamp > ?", (timestamp,))
+    c.execute("SELECT * FROM nodes WHERE timestamp > ?", (timestamp.replace("%"," "),))
     nodes = c.fetchall()
     # jsonify the nodes
     nodes = [{
