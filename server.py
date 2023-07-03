@@ -200,6 +200,30 @@ def update_node(node_id):
     db.commit()
     return jsonify({'success': True})
 
+# Define a route for updating a set of existing nodes in the database
+@app.route('/nodes/batch', methods=['PUT'])
+def update_nodes():
+    # Check if the user is authorized to make changes to the database
+    if not is_authorized(request.headers.get('Authorization')):
+        return jsonify({'success': False, 'error': 'Unauthorized'})
+    # Check if the tree id is correct
+    if request.headers.get('Tree-Id') != TREE_ID:
+        return jsonify({'success': False, 'error': 'Invalid Tree-Id'})
+    db, c = get_db()
+    data = request.get_json()
+    for node in data:
+        node_id = node['id']
+        text = node['text']
+        author = node['author']
+        timestamp = node['timestamp']
+        c.execute("UPDATE nodes SET text = ?, author = ?, timestamp = ? WHERE id = ?",
+                  (text, author, timestamp, node_id))
+        # Add the operation to the history table
+        c.execute("INSERT INTO history (timestamp, id, operation, author) VALUES (?, ?, ?, ?)",
+                    (time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()), node_id, 'update', author))
+    db.commit()
+    return jsonify({'success': True})
+
 # Define a route for deleting a node from the database
 @app.route('/nodes/<node_id>', methods=['DELETE'])
 def delete_node(node_id):
@@ -215,6 +239,27 @@ def delete_node(node_id):
     author = request.args.get('author')
     c.execute("INSERT INTO history (timestamp, id, operation, author) VALUES (?, ?, ?, ?)",
                 (time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()), node_id, 'delete', author))
+    db.commit()
+    return jsonify({'success': True})
+
+# Define a route for deleting a set of nodes from the database
+@app.route('/nodes/batch', methods=['DELETE'])
+def delete_nodes():
+    # Check if the user is authorized to make changes to the database
+    if not is_authorized(request.headers.get('Authorization')):
+        return jsonify({'success': False, 'error': 'Unauthorized'})
+    # Check if the tree id is correct
+    if request.headers.get('Tree-Id') != TREE_ID:
+        return jsonify({'success': False, 'error': 'Invalid Tree-Id'})
+    db, c = get_db()
+    data = request.get_json()
+    for node in data:
+        node_id = node['id']
+        c.execute("DELETE FROM nodes WHERE id = ?", (node_id,))
+        # Add the operation to the history table
+        author = request.args.get('author')
+        c.execute("INSERT INTO history (timestamp, id, operation, author) VALUES (?, ?, ?, ?)",
+                    (time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()), node_id, 'delete', author))
     db.commit()
     return jsonify({'success': True})
 
