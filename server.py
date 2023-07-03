@@ -135,8 +135,8 @@ def save_node():
     c.execute("INSERT INTO nodes (id, parent_ids, children_ids, text, author, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
                 (node_id, parent_ids, children_ids, text, author, timestamp))
     # Add the operation to the history table
-    c.execute("INSERT INTO history (id, timestamp, operation, author) VALUES (?, ?, ?, ?)",
-                (node_id, time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()), 'create', author))
+    c.execute("INSERT INTO history (timestamp, id, operation, author) VALUES (?, ?, ?, ?)",
+                (time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()), node_id, 'create', author))
     db.commit()
     return jsonify({'success': True})
 
@@ -195,8 +195,8 @@ def update_node(node_id):
     c.execute("UPDATE nodes SET text = ?, author = ?, timestamp = ? WHERE id = ?",
               (text, author, timestamp, node_id))
     # Add the operation to the history table
-    c.execute("INSERT INTO history (id, timestamp, operation, author) VALUES (?, ?, ?, ?)",
-                (node_id, time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()), 'update', author))
+    c.execute("INSERT INTO history (timestamp, id, operation, author) VALUES (?, ?, ?, ?)",
+                (time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()), node_id, 'update', author))
     db.commit()
     return jsonify({'success': True})
 
@@ -213,8 +213,8 @@ def delete_node(node_id):
     c.execute("DELETE FROM nodes WHERE id = ?", (node_id,))
     # Add the operation to the history table
     author = request.args.get('author')
-    c.execute("INSERT INTO history (id, timestamp, operation, author) VALUES (?, ?, ?, ?)",
-                (node_id, time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()), 'delete', author))
+    c.execute("INSERT INTO history (timestamp, id, operation, author) VALUES (?, ?, ?, ?)",
+                (time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()), node_id, 'delete', author))
     db.commit()
     return jsonify({'success': True})
 
